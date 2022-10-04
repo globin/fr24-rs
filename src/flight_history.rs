@@ -5,8 +5,6 @@ use chrono::{serde::ts_seconds_option, DateTime, Datelike, NaiveTime, Utc, Weekd
 use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 
-static FLIGHT_URL: &str = "";
-
 #[derive(Debug, Deserialize)]
 pub struct FlightNumberData {
     default: String,
@@ -129,6 +127,7 @@ pub struct FlightInfo {
     weekday: HashSet<Weekday>,
     model: HashSet<String>,
     callsign: HashSet<String>,
+    flight_number: HashSet<String>,
 }
 impl From<Flight> for FlightInfo {
     fn from(f: Flight) -> Self {
@@ -152,6 +151,7 @@ impl From<Flight> for FlightInfo {
                 Some(cs) => HashSet::from([cs]),
                 None => HashSet::new(),
             },
+            flight_number: HashSet::from([f.identification.number.default]).into_iter().chain(f.identification.number.alternative.into_iter()).collect()
         }
     }
 }
@@ -174,6 +174,8 @@ pub fn consolidate_flight_info(flights: Vec<Flight>) -> FlightNoMap {
                             .arrival
                             .map(|dt| fi.scheduled_arrival.insert(dt.time()));
                         f.identification.callsign.map(|cs| fi.callsign.insert(cs));
+                        fi.flight_number.insert(f.identification.number.default);
+                        f.identification.number.alternative.map(|cs| fi.flight_number.insert(cs));
                     }
                     None => {
                         odpm.insert(format!("{origin}-{destination}"), FlightInfo::from(f));
