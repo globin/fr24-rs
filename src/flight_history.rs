@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, NaiveTime, Utc, Weekday, Datelike, serde::ts_seconds_option};
+use chrono::{serde::ts_seconds_option, DateTime, Datelike, NaiveTime, Utc, Weekday};
 use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 
@@ -128,6 +128,7 @@ pub struct FlightInfo {
     scheduled_arrival: HashSet<NaiveTime>,
     weekday: HashSet<Weekday>,
     model: HashSet<String>,
+    callsign: HashSet<String>,
 }
 impl From<Flight> for FlightInfo {
     fn from(f: Flight) -> Self {
@@ -146,7 +147,11 @@ impl From<Flight> for FlightInfo {
                 Some(dt) => HashSet::from([dt.time()]),
                 None => HashSet::new(),
             },
-            model: HashSet::from([f.aircraft.model.code])
+            model: HashSet::from([f.aircraft.model.code]),
+            callsign: match f.identification.callsign {
+                Some(cs) => HashSet::from([cs]),
+                None => HashSet::new(),
+            },
         }
     }
 }
@@ -164,9 +169,11 @@ pub fn consolidate_flight_info(flights: Vec<Flight>) -> FlightNoMap {
                             fi.weekday.insert(dt.weekday());
                             fi.scheduled_departure.insert(dt.time())
                         });
-                        f.time.scheduled.arrival.map(|dt| {
-                            fi.scheduled_arrival.insert(dt.time())
-                        });
+                        f.time
+                            .scheduled
+                            .arrival
+                            .map(|dt| fi.scheduled_arrival.insert(dt.time()));
+                        f.identification.callsign.map(|cs| fi.callsign.insert(cs));
                     }
                     None => {
                         odpm.insert(format!("{origin}-{destination}"), FlightInfo::from(f));
@@ -176,10 +183,8 @@ pub fn consolidate_flight_info(flights: Vec<Flight>) -> FlightNoMap {
             None => {
                 let origin = &f.airport.origin.code.icao;
                 let destination = &f.airport.destination.code.icao;
-                let odpm = HashMap::from([(
-                    format!("{origin}-{destination}"),
-                    FlightInfo::from(f),
-                )]);
+                let odpm =
+                    HashMap::from([(format!("{origin}-{destination}"), FlightInfo::from(f))]);
                 acc.insert(flight_no.clone(), odpm);
             }
         }
